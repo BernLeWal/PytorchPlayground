@@ -12,12 +12,17 @@ from tqdm.autonotebook import tqdm
 
 # GLOBAL
 _device = "cuda:0" if (torch.has_cuda) else ("mps" if torch.has_mps else "cpu")
-logging.basicConfig(filename="sample2opt.log", level=logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG)    # filename="sample2opt.log"
+
+## Settings
+_filenameTraining = "data/test.json" # data for training-file in json format
+_filenameValidation = "data/valid.json" # data for validation-file in json format
 
 _q = 3 # q-gram size
+_hidden_size = 40
 _criterion = nn.CrossEntropyLoss()  # loss-function to be used
 _learning_rate = 0.0005
-
+_epochs = 10    # number of epochs for training
 
 
 ## Class-Definition Feed-Forward net with one hidden layer
@@ -30,12 +35,9 @@ class FeedForward(nn.Module):
         self.hidden = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
-        startFeedForward = timer()
         y_1 = self.input_layer(x)
         y_non_linear = self.sigmoid(y_1)
         out = self.hidden(y_non_linear)
-        logging.debug("FeedForward.forward() %f ms" % ((timer()-startFeedForward)*1000.0))
-
         return out
 
 
@@ -96,14 +98,11 @@ def collectLabelsAndEntities(training):
 
 # Build Label-Tensors
 def buildLabelTensor(label, label2index):
-    startBuildLabelTensor = timer()
     if label not in label2index:
         raise ValueError(f"Unknown language '{label}' .")
     
     labelTensor = torch.zeros(1, len(label2index))
     labelTensor[0][label2index[label]] = 1
-
-    logging.debug("buildLabelTensor() %f ms" % ((timer()-startBuildLabelTensor)*1000.0))
     return labelTensor
 
 def buildLabelTensors(labels):
@@ -115,22 +114,19 @@ def buildLabelTensors(labels):
 
 # Build Entity-Tensors
 def buildEntityTensor(text, entity2index):
-    startBuildEntityTensor = timer()
     entityTensor = torch.zeros(1, len(entity2index))
     for start, end in zip(range(0, len(text)-_q), range(_q, len(text))):
         entity = text[start:end]
         if entity in entity2index:
             entityTensor[0][entity2index[entity]] = 1
-        else:
-            logging.warn(f"Ignoring previously unseen entity: '{entity}'")
-
-    logging.debug("buildEntityTensor() %f ms" % ((timer()-startBuildEntityTensor)*1000.0))
+#        else:
+#            logging.warn(f"Ignoring previously unseen entity: '{entity}'")
     return entityTensor
 
 def buildEntityTensors(training_data, entities):
     entity_tensors = dict()
     samples = list(range(len(training_data)))
-    for i in tqdm(samples, unit="sample", desc="Generate Tensor"):
+    for i in tqdm(samples, unit="sample", desc="Generate Tensors"):
         _, text = training_data[i]
         entity_tensors[text] = buildEntityTensor(text, entities).to(_device)
     return entity_tensors
@@ -151,7 +147,6 @@ def createKNN(input, output, hidden_size):
 
 # Training
 def trainOne(model, optimizer, category_tensor, text_tensor):
-    startTrain = timer()
     model.train()
 
     output = model(text_tensor[0])
@@ -161,10 +156,9 @@ def trainOne(model, optimizer, category_tensor, text_tensor):
 
     optimizer.step()
 
-    logging.debug("train() %f ms" % ((timer()-startTrain)*1000.0))
     return output, loss.item()
 
-def trainAll(epochs, training_data, labelTensors, entityTensors, model, optimizer):
+def trainAll(epochs, training_data, labelTensors, entityTensors, model, optimizer, validation_data, labels, validationTensors):
     for epoch in tqdm(range(epochs), unit="epoch"):
         samples = list(range(len(training_data)))
         random.shuffle(samples)
@@ -175,23 +169,61 @@ def trainAll(epochs, training_data, labelTensors, entityTensors, model, optimize
             input = entityTensors[text] 
 
             output, loss = trainOne(model, optimizer, label, input)
+            #print(f"Loss:\t{str(loss)}")
+
+        total, correct = evaluateAll(validation_data, model, labels, validationTensors)
+        print(f"Samples evaluated:\t{total}")
+        print(f"Samples correct:\t{correct}")
+        print(f"Accuracy:\t{correct/total}")
+
+
+# Evaluation
+def evaluateOne(model, validation_tensor):
+    output = model(validation_tensor[0])
+    return output
+
+def evaluateAll(dataset, model, labels, validationTensors):
+    index2label = dict()
+    for key in labels:
+        index2label[labels[key]] = key
+
+    model.eval()
+
+    total = 0.0
+    correct = 0.0
+    for i in tqdm(range(len(dataset)), unit="sample", desc="Evaluation"):
+        label, text = dataset[i]
+        input = validationTensors[text]
+
+        output = evaluateOne(model, input)
+        predicted_item = torch.argmax(output).item()
+        predicted = index2label[predicted_item]
+
+        total += 1.0
+        correct += predicted == label
+    return total, correct
 
 
 # MAIN
 def main():
+    start = timer()
     print("Language Classification with PyTorch (speed optimized):")
     print(f"Will use device: {_device}")
 
-    training = loadData("data/test.json")
+    training = loadData(_filenameTraining)
     training_data = LanguagesDataset(training)
+    validation = loadData(_filenameValidation)
+    validation_data = LanguagesDataset(validation)
+
     labels, entities = collectLabelsAndEntities(training)
     labelTensors = buildLabelTensors(labels)
     entityTensors = buildEntityTensors(training_data, entities)
+    validationTensors = buildEntityTensors(validation_data, entities)
 
-    model = createKNN(entities, labels, 40)
+    model = createKNN(entities, labels, _hidden_size)
     optimizer = optim.SGD(model.parameters(), lr=_learning_rate)
-    trainAll(10, training_data, labelTensors, entityTensors, model, optimizer)
-
+    trainAll(_epochs, training_data, labelTensors, entityTensors, model, optimizer, validation_data, labels, validationTensors)
+    print("Total time %f s" % ((timer()-start)))
 
 
 if __name__ == "__main__":
