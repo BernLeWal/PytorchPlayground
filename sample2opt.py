@@ -1,5 +1,11 @@
 #!/bin/python
 
+"""
+Sample-Code based on the iX-article "Einstieg in PyTorch" (see https://ix.de/zbu8)
+All listings added to the whole python file, bugfixes applied ;-)
+With a few optimizations to speed up executing (in fact sample2.py would not be realistic usable on my HW)
+"""
+
 import json
 import logging
 import torch
@@ -12,7 +18,7 @@ from tqdm.autonotebook import tqdm
 
 # GLOBAL
 _device = "cuda:0" if (torch.has_cuda) else ("mps" if torch.has_mps else "cpu")
-logging.basicConfig(level=logging.DEBUG)    # filename="sample2opt.log"
+logging.basicConfig(level=logging.DEBUG)    # filename="logs/sample2opt.log"
 
 ## Settings
 _filenameTraining = "data/test.json" # data for training-file in json format

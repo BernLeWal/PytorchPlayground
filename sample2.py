@@ -1,5 +1,10 @@
 #!/bin/python
 
+"""
+Sample-Code based on the iX-article "Einstieg in PyTorch" (see https://ix.de/zbu8)
+All listings added to the whole python file, bugfixes applied ;-)
+"""
+
 import json
 import logging
 import torch
@@ -11,7 +16,7 @@ from tqdm.autonotebook import tqdm
 
 
 # Generelle Initialisierung
-logging.basicConfig(filename="sample2.log", level=logging.DEBUG)
+logging.basicConfig(filename="logs/sample2.log", level=logging.DEBUG)
 
 ## Check installed device for calculations
 if torch.has_cuda:

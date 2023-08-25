@@ -10,9 +10,13 @@ from LanguagesDataset import LanguagesDataset
 from FeedForward import FeedForward
 from tqdm.autonotebook import tqdm
 
+"""
+Sample-Code originaly based on the iX-article "Einstieg in PyTorch" (see https://ix.de/zbu8)
+Separated the Workflow implementation into distinct classes.
+"""
 
 # GLOBAL
-logging.basicConfig(level=logging.DEBUG)    # filename="sample2opt.log"
+logging.basicConfig(level=logging.DEBUG)    # filename="logs/sample2opt.log"
 
 
 class LanguagesNN:
